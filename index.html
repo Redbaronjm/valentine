@@ -55,6 +55,7 @@
         radial-gradient(circle at 50% 30%, rgba(255,255,255,0.38), rgba(255,255,255,0.06) 55%, rgba(0,0,0,0.18) 100%),
         linear-gradient(180deg, rgba(0,0,0,0.10), rgba(0,0,0,0.18));
       pointer-events:none;
+      z-index: 0;
     }
 
     .wrap{
@@ -174,16 +175,17 @@
       filter:none !important;
     }
 
-    /* falling hearts (simple confetti) */
+    /* falling hearts */
     .heart{
       position: fixed;
       font-size: 18px;
       transform: translateY(-20px);
-      opacity: 0.9;
+      opacity: 0.95;
       animation: fall linear forwards;
       pointer-events:none;
       z-index: 20;
       text-shadow: 0 8px 20px rgba(0,0,0,0.2);
+      will-change: transform, opacity;
     }
     @keyframes fall{
       to { transform: translateY(110vh) rotate(360deg); opacity: 0.0; }
@@ -229,24 +231,24 @@
      * - valentaine1Bk.jpg
      * - pleading.gif
      * - celebrate1.gif
-     * - celebrate2.gif  (your 10s looping memories gif)
+     * - celebrate2.gif  (your ~10s looping memories gif)
      * - yes.mp3         (optional sound)
      *********************************************************/
 
     const PLEADING_GIF = "pleading.gif";
-    const CELEBRATE_1   = "celebrate1.gif";
-    const CELEBRATE_2   = "celebrate2.gif"; // loops naturally
-    const BURST_MS      = 1800;             // celebration burst duration
+    const CELEBRATE_1  = "celebrate1.gif";
+    const CELEBRATE_2  = "celebrate2.gif"; // loops naturally
+    const BURST_MS     = 1800;             // celebration burst duration
 
-    const gifEl   = document.getElementById("gif");
-    const arena   = document.getElementById("arena");
-    const noWrap  = document.getElementById("noWrap");
-    const yesWrap = document.getElementById("yesWrap");
-    const msg     = document.getElementById("msg");
-    const subText = document.getElementById("subText");
+    const gifEl    = document.getElementById("gif");
+    const arena    = document.getElementById("arena");
+    const noWrap   = document.getElementById("noWrap");
+    const yesWrap  = document.getElementById("yesWrap");
+    const msg      = document.getElementById("msg");
+    const subText  = document.getElementById("subText");
 
-    const yesBtn  = document.getElementById("yesBtn");
-    const noBtn   = document.getElementById("noBtn");
+    const yesBtn   = document.getElementById("yesBtn");
+    let   noBtn    = document.getElementById("noBtn");
     const yesAudio = document.getElementById("yesAudio");
 
     // initial GIF
@@ -262,7 +264,7 @@
 
     function moveNoButton(){
       const arenaRect = rect(arena);
-      const noRect = rect(noWrap);
+      const noRect  = rect(noWrap);
       const yesRect = rect(yesWrap);
 
       const pad = 10;
@@ -277,6 +279,7 @@
 
         tries++;
 
+        // Keep NO away from YES
         const candidate = {
           left: arenaRect.left + x,
           top: arenaRect.top + y,
@@ -285,10 +288,10 @@
         };
 
         const tooClose =
-          !(candidate.right < yesRect.left - 18 ||
-            candidate.left > yesRect.right + 18 ||
+          !(candidate.right  < yesRect.left - 18 ||
+            candidate.left   > yesRect.right + 18 ||
             candidate.bottom < yesRect.top - 18 ||
-            candidate.top > yesRect.bottom + 18);
+            candidate.top    > yesRect.bottom + 18);
 
         if (!tooClose) break;
       } while (tries < 12);
@@ -304,11 +307,11 @@
       else msg.textContent = "You already know what to press 😏";
     }
 
-    // teleport feel: quick fade then move
     function escapeNo(e){
       e.preventDefault();
       e.stopPropagation();
 
+      // teleport feel: quick fade then move
       noWrap.style.transition = "opacity 90ms ease";
       noWrap.style.opacity = "0";
       setTimeout(() => {
@@ -317,10 +320,11 @@
       }, 90);
     }
 
-    // Attach escape triggers
-    ["mouseenter","mouseover","pointerenter","touchstart","mousedown","click"].forEach(evt => {
-      noBtn.addEventListener(evt, escapeNo, { passive: false });
-    });
+    function attachNoEscapeHandlers(){
+      ["mouseenter","mouseover","pointerenter","touchstart","mousedown","click"].forEach(evt => {
+        noBtn.addEventListener(evt, escapeNo, { passive: false });
+      });
+    }
 
     // Initialize absolute layout inside arena
     function initPositions(){
@@ -335,25 +339,39 @@
       noWrap.style.top  = "52px";
       noWrap.style.transform = "translateX(-50%)";
     }
+
     initPositions();
+    attachNoEscapeHandlers();
 
     /*********************************************************
-     * Hearts confetti
+     * Hearts (continuous "rain" after YES)
      *********************************************************/
-    function spawnHearts(count = 24){
+    function spawnHearts(count = 6){
       const hearts = ["💖","💘","❤️","💗","💕"];
-      for (let i=0; i<count; i++){
+      for (let i = 0; i < count; i++){
         const el = document.createElement("div");
         el.className = "heart";
-        el.textContent = hearts[Math.floor(Math.random()*hearts.length)];
-        el.style.left = Math.floor(Math.random()*100) + "vw";
+        el.textContent = hearts[Math.floor(Math.random() * hearts.length)];
+        el.style.left = Math.floor(Math.random() * 100) + "vw";
         el.style.top = "-20px";
-        const dur = 2600 + Math.random()*1800;
+
+        const dur = 4000 + Math.random() * 3000; // slower, romantic fall
         el.style.animationDuration = dur + "ms";
-        el.style.fontSize = (14 + Math.random()*18) + "px";
+        el.style.fontSize = (14 + Math.random() * 18) + "px";
+
         document.body.appendChild(el);
         setTimeout(() => el.remove(), dur + 200);
       }
+    }
+
+    let heartInterval = null;
+
+    function startHeartRain(){
+      if (heartInterval) return; // prevent duplicates
+      spawnHearts(12); // initial burst
+      heartInterval = setInterval(() => {
+        spawnHearts(4); // gentle ongoing rain
+      }, 1200); // every 1.2 seconds
     }
 
     /*********************************************************
@@ -361,20 +379,21 @@
      *********************************************************/
     function lockButtons(){
       yesBtn.classList.add("disabled");
-      noBtn.classList.add("disabled");
       yesBtn.disabled = true;
 
-      // Stop NO from moving after YES (remove listeners cleanly)
+      // Disable NO and stop movement by replacing it with a clone (no listeners)
       const newNoBtn = noBtn.cloneNode(true);
+      newNoBtn.classList.add("disabled");
+      newNoBtn.disabled = true;
       noBtn.parentNode.replaceChild(newNoBtn, noBtn);
+      noBtn = newNoBtn;
     }
 
     /*********************************************************
      * Celebration sequence + Sound
      *********************************************************/
     function playYesSound(){
-      // Most browsers allow audio here because it is triggered by a click.
-      // If the file is missing, nothing breaks.
+      // Triggered by click, so browsers usually allow it.
       try{
         yesAudio.currentTime = 0;
         const p = yesAudio.play();
@@ -398,7 +417,7 @@
 
       playYesSound();
       playCelebrationSequence();
-      spawnHearts(28);
+      startHeartRain();
       lockButtons();
     });
   </script>
